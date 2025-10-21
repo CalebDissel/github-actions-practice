@@ -1,3 +1,4 @@
+trigger
 # File Encoder
 
 A Python package for encoding files with various character encodings.
