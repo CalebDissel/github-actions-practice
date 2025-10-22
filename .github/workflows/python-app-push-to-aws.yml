@@ -93,12 +93,12 @@ jobs:
       run: |
         # Delete existing package (ignore if it doesn't exist)
         aws codeartifact delete-package-versions \
-          --domain zabalytics \
+          --domain assignment9 \
           --repository pypi \
           --format pypi \
           --package file-encoder \
           --versions 0.1.0 \
-          --region us-west-2 || true
+          --region us-east-2 || true
 
         # Upload the package
         twine upload --repository-url $CODEARTIFACT_REPOSITORY_URL \
