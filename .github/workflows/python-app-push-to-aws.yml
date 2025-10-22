@@ -77,28 +77,50 @@ jobs:
 
     - name: Configure CodeArtifact
       if: matrix.python-version == '3.13' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      shell: bash
       run: |
-        # Install twine from PyPI first
-        pip install twine
+        set -euo pipefail
+        pip install --upgrade twine
 
-        # Get CodeArtifact credentials
-        export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain zabalytics --query authorizationToken --output text --region us-west-2)
-        export CODEARTIFACT_REPOSITORY_URL=$(aws codeartifact get-repository-endpoint --domain zabalytics --repository pypi --format pypi --query repositoryEndpoint --output text --region us-west-2)
+        CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+          --domain "${{ secrets.CA_DOMAIN }}" \
+          --query authorizationToken --output text \
+          --region "${{ secrets.AWS_DEFAULT_REGION }}")
 
-        echo "CODEARTIFACT_AUTH_TOKEN=$CODEARTIFACT_AUTH_TOKEN" >> $GITHUB_ENV
-        echo "CODEARTIFACT_REPOSITORY_URL=$CODEARTIFACT_REPOSITORY_URL" >> $GITHUB_ENV
+        CODEARTIFACT_REPOSITORY_URL=$(aws codeartifact get-repository-endpoint \
+          --domain "${{ secrets.CA_DOMAIN }}" \
+          --repository "${{ secrets.CA_REPOSITORY }}" \
+          --format pypi \
+          --query repositoryEndpoint --output text \
+          --region "${{ secrets.AWS_DEFAULT_REGION }}")
 
+        echo "CODEARTIFACT_AUTH_TOKEN=$CODEARTIFACT_AUTH_TOKEN" >> "$GITHUB_ENV"
+        echo "CODEARTIFACT_REPOSITORY_URL=$CODEARTIFACT_REPOSITORY_URL" >> "$GITHUB_ENV"
+        echo "CA_DOMAIN=${{ secrets.CA_DOMAIN }}" >> "$GITHUB_ENV"
+        echo "CA_REPOSITORY=${{ secrets.CA_REPOSITORY }}" >> "$GITHUB_ENV"
+        echo "AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}" >> "$GITHUB_ENV"
+    
     - name: Publish to CodeArtifact
       if: matrix.python-version == '3.13' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      shell: bash
+      env:
+        TWINE_USERNAME: aws
+        TWINE_PASSWORD: ${{ env.CODEARTIFACT_AUTH_TOKEN }}
       run: |
-        # Delete existing package (ignore if it doesn't exist)
+        set -euo pipefail
+    
+        # Optional: delete the exact version if it already exists (ignore errors)
+        WHEEL=$(ls dist/*.whl | head -n 1)
+        PKG=$(basename "$WHEEL" | cut -d- -f1)
+        VER=$(basename "$WHEEL" | cut -d- -f2)
         aws codeartifact delete-package-versions \
-          --domain assignment9 \
-          --repository pypi \
+          --domain "$CA_DOMAIN" \
+          --repository "$CA_REPOSITORY" \
           --format pypi \
-          --package file-encoder \
-          --versions 0.1.0 \
-          --region us-east-2 || true
+          --package "$PKG" \
+          --versions "$VER" \
+          --region "$AWS_DEFAULT_REGION" || true
+
 
         # Upload the package
         twine upload --repository-url $CODEARTIFACT_REPOSITORY_URL \
